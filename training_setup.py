@@ -2,9 +2,11 @@ import wandb
 import torch
 import wandb.sdk
 
+from dotenv import load_dotenv
 from pathlib import Path
 from pytorch_lightning import LightningModule
 from typing import Optional
+
 
 from .callbacks import S3SyncCallback
 
@@ -58,3 +60,30 @@ def set_model_weight_from_checkpoint(
     state_dict = torch.load((s3_sync_callback.load_local_dir / resume_filename))
     model.load_state_dict(state_dict["state_dict"])
     return model
+
+
+def set_os_env_from_notebook_secrets() -> str:
+    env = "LOCAL"
+    if load_dotenv():
+        return env
+        
+    try:
+        from kaggle_secrets import UserSecretsClient
+        os.environ["WANDB_API_KEY"] = UserSecretsClient().get_secret("wandb_api")
+        os.environ["AWS_ACCESS_KEY_ID"] = UserSecretsClient().get_secret("s3_aws_access_key")
+        os.environ["AWS_SECRET_ACCESS_KEY"] = UserSecretsClient().get_secret("s3_aws_secret_access_key")
+        env = "KAGGLE"
+    except ModuleNotFoundError:
+        pass
+        
+    try:
+        from google.colab import userdata
+        os.environ["WANDB_API_KEY"] = userdata.get("wandb_api")
+        os.environ["AWS_ACCESS_KEY_ID"] = userdata.get("s3_aws_access_key")
+        os.environ["AWS_SECRET_ACCESS_KEY"] = userdata.get("s3_aws_secret_access_key")
+        os.environ["KAGGLE_JSON_KEY"] = userdata.get("kaggle_json_key")
+        env = "COLAB"
+    except ModuleNotFoundError:
+        pass
+    
+    return env
